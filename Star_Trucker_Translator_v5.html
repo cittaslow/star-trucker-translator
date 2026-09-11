@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Trucker — XML Çeviri Aracı v5</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --accent: #f0a500;
+    --accent2: #58a6ff;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  header span.icon { color: var(--accent); font-size: 1.3rem; }
+  .badge {
+    background: var(--accent); color: #000;
+    font-size: 0.7rem; font-weight: 700;
+    padding: 2px 7px; border-radius: 20px; margin-left: 4px;
+  }
+
+  .layout { display: grid; grid-template-columns: 280px 1fr; height: calc(100vh - 53px); }
+
+  /* SOL PANEL */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sidebar-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .sidebar-section h2 {
+    font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+  }
+  .api-key-wrap { display: flex; gap: 6px; align-items: center; }
+  .api-key-wrap input {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 5px 8px;
+    font-size: 0.78rem; flex: 1; min-width: 0; font-family: monospace;
+  }
+  .api-key-wrap input:focus { outline: none; border-color: var(--accent2); }
+  .api-status { font-size: 0.72rem; margin-top: 5px; }
+  .api-status.ok { color: var(--green); }
+  .api-status.err { color: var(--red); }
+  .api-status.idle { color: var(--text-muted); }
+
+  .dict-list { flex: 1; overflow-y: auto; padding: 0; }
+  .dict-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 14px; font-size: 0.82rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .dict-item .en { color: var(--text-muted); flex: 1; font-style: italic; }
+  .dict-item .arr { color: var(--border); }
+  .dict-item .tr { color: var(--accent); flex: 1; }
+  .dict-item button {
+    background: none; border: none; color: var(--red);
+    cursor: pointer; font-size: 0.9rem; padding: 0 2px; opacity: 0.6;
+  }
+  .dict-item button:hover { opacity: 1; }
+
+  .add-term { display: flex; gap: 6px; }
+  .add-term input {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 5px 8px;
+    font-size: 0.8rem; flex: 1; min-width: 0;
+  }
+  .add-term input:focus { outline: none; border-color: var(--accent2); }
+
+  .btn-sm {
+    background: var(--accent); color: #000; border: none;
+    border-radius: 6px; padding: 5px 10px;
+    font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .btn-sm:hover { opacity: 0.85; }
+  .btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-sm.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-sm.danger { background: var(--red); color: #fff; }
+  .btn-sm.blue { background: var(--accent2); color: #000; }
+  .btn-sm.green { background: var(--green); color: #000; }
+
+  /* MAIN */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .tab {
+    padding: 10px 18px; font-size: 0.83rem; cursor: pointer;
+    color: var(--text-muted); border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+  .tab-content.active { display: flex; }
+
+  /* TAB 1: Dosya Yükle */
+  .file-drop-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 20px; padding: 28px; flex: 1; overflow-y: auto;
+  }
+  .file-drop {
+    border: 2px dashed var(--border); border-radius: 10px;
+    padding: 36px 20px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .file-drop:hover, .file-drop.drag { border-color: var(--accent2); background: rgba(88,166,255,0.05); }
+  .file-drop.loaded { border-color: var(--green); background: rgba(63,185,80,0.05); }
+  .file-drop .drop-icon { font-size: 2.2rem; }
+  .file-drop h3 { font-size: 0.95rem; font-weight: 600; }
+  .file-drop p { font-size: 0.78rem; color: var(--text-muted); }
+  .file-drop .file-name { font-size: 0.75rem; color: var(--green); font-family: monospace; }
+
+  .load-action {
+    padding: 14px 24px; background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .load-summary { font-size: 0.82rem; color: var(--text-muted); }
+  .load-summary b { color: var(--accent); }
+
+  /* TAB 2: Çeviri */
+  .translate-header {
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    padding: 10px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .translate-stats { margin-left: auto; display: flex; gap: 16px; }
+  .stat { display: flex; flex-direction: column; align-items: flex-end; }
+  .stat-val { color: var(--text); font-weight: 700; font-size: 0.95rem; }
+  .stat-lbl { font-size: 0.68rem; color: var(--text-muted); }
+
+  .deepl-progress {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 16px; display: none; align-items: center; gap: 10px;
+  }
+  .deepl-progress.show { display: flex; }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .deepl-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .deepl-fill { height: 100%; background: var(--accent); transition: width .3s; }
+
+  .progress-bar { height: 3px; background: var(--border); overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--green); transition: width .3s; }
+
+  .filter-bar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 8px 16px; display: flex; gap: 8px; align-items: center;
+  }
+  .filter-bar input {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 4px 8px;
+    font-size: 0.8rem; width: 220px;
+  }
+  .filter-bar input:focus { outline: none; border-color: var(--accent2); }
+  .filter-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--text-muted); border-radius: 6px;
+    padding: 4px 10px; font-size: 0.78rem; cursor: pointer;
+  }
+  .filter-btn.active { background: var(--surface2); color: var(--text); border-color: var(--accent2); }
+
+  .string-table { flex: 1; overflow-y: auto; }
+  .str-row {
+    display: flex; border-bottom: 1px solid var(--border);
+    min-height: 40px; font-size: 0.8rem;
+  }
+  .str-row:hover { background: rgba(255,255,255,0.02); }
+  .str-row.translated { border-left: 2px solid var(--green); }
+  .str-row.missing { border-left: 2px solid var(--yellow); }
+  .str-num {
+    background: var(--surface); color: var(--text-muted);
+    text-align: right; user-select: none; min-width: 42px;
+    border-right: 1px solid var(--border); font-size: 0.72rem;
+    font-family: monospace; flex-shrink: 0;
+    display: flex; align-items: flex-start; justify-content: flex-end;
+    padding: 10px 6px 0 0;
+  }
+  .str-en-col {
+    flex: 1; min-width: 0; padding: 8px 10px;
+    color: var(--text-muted); border-right: 1px solid var(--border);
+    font-style: italic; line-height: 1.45; word-break: break-word;
+  }
+  .str-id { font-size: 0.65rem; color: var(--text-muted); display: block; margin-bottom: 2px; font-family: monospace; font-style: normal; }
+  .str-tr-wrap { flex: 1; min-width: 0; }
+  .str-tr {
+    width: 100%; height: 100%; min-height: 40px;
+    background: transparent; border: none; color: var(--text);
+    padding: 8px 10px; font-size: 0.8rem; font-family: inherit;
+    resize: none; outline: none; line-height: 1.45;
+  }
+  .str-tr:focus { background: rgba(88,166,255,0.04); }
+
+  /* TAB 3: Dışa Aktar */
+  .export-toolbar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 16px; display: flex; gap: 8px; align-items: center;
+  }
+  .export-info { font-size: 0.78rem; color: var(--text-muted); margin-left: auto; }
+  .editor-wrap {
+    flex: 1; display: flex; overflow: hidden;
+    background: var(--bg);
+    font-family: 'Cascadia Code','Fira Code','Consolas',monospace;
+    font-size: 0.8rem; line-height: 1.6;
+  }
+  .line-nums {
+    background: var(--surface); color: var(--text-muted);
+    padding: 14px 8px 14px 4px; text-align: right;
+    user-select: none; overflow: hidden; min-width: 44px;
+    border-right: 1px solid var(--border); font-size: 0.72rem;
+    line-height: 1.6; white-space: pre;
+  }
+  .editor-wrap textarea {
+    flex: 1; background: var(--bg); color: var(--text);
+    border: none; padding: 14px; font-family: inherit;
+    font-size: inherit; line-height: inherit;
+    resize: none; outline: none; overflow-y: auto;
+  }
+
+  .btn {
+    background: var(--accent); color: #000; border: none;
+    border-radius: 6px; padding: 7px 16px;
+    font-size: 0.85rem; font-weight: 700; cursor: pointer;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.blue { background: var(--accent2); color: #000; }
+  .btn.ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+  .btn.green { background: var(--green); color: #000; }
+  .btn.danger { background: var(--red); color: #fff; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 18px; border-radius: 8px;
+    font-size: 0.85rem; z-index: 999;
+    opacity: 0; transform: translateY(8px); transition: all .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.ok { border-color: var(--green); }
+  .toast.err { border-color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="icon">🚛</span>
+  <h1>Star Trucker — XML Çeviri Aracı</h1>
+  <div class="badge">v5</div>
+</header>
+
+<div class="layout">
+
+  <!-- SOL PANEL -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <h2>🔑 DeepL API</h2>
+      <div class="api-key-wrap">
+        <input type="password" id="apiKey" placeholder="DeepL API key..." oninput="saveApiKey()">
+        <button class="btn-sm blue" onclick="testApiKey()">Test</button>
+      </div>
+      <div class="api-status idle" id="apiStatus">API key giriniz</div>
+    </div>
+
+    <div class="sidebar-section">
+      <h2>📖 Terim Sözlüğü</h2>
+      <div class="add-term">
+        <input type="text" id="dictEn" placeholder="İngilizce..." onkeydown="if(event.key==='Enter')addDictEntry()">
+        <input type="text" id="dictTr" placeholder="Türkçe..." onkeydown="if(event.key==='Enter')addDictEntry()">
+        <button class="btn-sm" onclick="addDictEntry()">+</button>
+      </div>
+    </div>
+
+    <div class="dict-list" id="dictList"></div>
+
+    <div class="sidebar-section" style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn-sm secondary" onclick="exportDict()">💾 Sözlüğü Dışa Aktar</button>
+      <input type="file" id="importDictFile" accept=".json" style="display:none" onchange="importDict(event)">
+      <button class="btn-sm secondary" onclick="document.getElementById('importDictFile').click()">📂 Sözlüğü İçe Aktar</button>
+    </div>
+  </div>
+
+  <!-- SAĞ PANEL -->
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('load')">1 · Dosya Yükle</div>
+      <div class="tab" onclick="switchTab('translate')">2 · Çeviri</div>
+      <div class="tab" onclick="switchTab('export')">3 · Dışa Aktar</div>
+    </div>
+
+    <!-- TAB 1 -->
+    <div class="tab-content active" id="tab-load">
+      <div class="file-drop-grid">
+        <div class="file-drop" id="dropEN"
+          onclick="document.getElementById('fileEN').click()"
+          ondragover="dragOver(event,'dropEN')" ondragleave="dragLeave('dropEN')" ondrop="dropFile(event,'en')">
+          <div class="drop-icon">🇬🇧</div>
+          <h3>İngilizce XML</h3>
+          <p>Orijinal kaynak dosya</p>
+          <div class="file-name" id="fileNameEN">Dosya seçilmedi</div>
+          <input type="file" id="fileEN" accept=".xml" style="display:none" onchange="loadXMLFile(event,'en')">
+        </div>
+        <div class="file-drop" id="dropTR"
+          onclick="document.getElementById('fileTR').click()"
+          ondragover="dragOver(event,'dropTR')" ondragleave="dragLeave('dropTR')" ondrop="dropFile(event,'tr')">
+          <div class="drop-icon">🇹🇷</div>
+          <h3>Türkçe XML</h3>
+          <p>Mevcut çeviri dosyası</p>
+          <div class="file-name" id="fileNameTR">Dosya seçilmedi</div>
+          <input type="file" id="fileTR" accept=".xml" style="display:none" onchange="loadXMLFile(event,'tr')">
+        </div>
+      </div>
+      <div class="load-action">
+        <button class="btn green" onclick="analyzeFiles()" id="btnAnalyze" disabled>🔍 Dosyaları Karşılaştır</button>
+        <div class="load-summary" id="loadSummary">Her iki dosyayı da yükleyin</div>
+      </div>
+    </div>
+
+    <!-- TAB 2 -->
+    <div class="tab-content" id="tab-translate">
+      <div class="translate-header">
+        <button class="btn green" id="btnTranslate" onclick="translateAll()" disabled>⚡ DeepL ile Çevir</button>
+        <button class="btn-sm secondary" onclick="applyDictToAll()">📖 Sözlük Uygula</button>
+        <button class="btn-sm secondary" onclick="saveSession()">💾 Oturumu Kaydet</button>
+        <button class="btn-sm danger" onclick="clearTranslations()">🗑 Temizle</button>
+        <div class="translate-stats">
+          <div class="stat"><span class="stat-val" id="statTotal">0</span><span class="stat-lbl">toplam</span></div>
+          <div class="stat"><span class="stat-val" id="statDone" style="color:var(--green)">0</span><span class="stat-lbl">çevrildi</span></div>
+          <div class="stat"><span class="stat-val" id="statPending" style="color:var(--yellow)">0</span><span class="stat-lbl">bekliyor</span></div>
+        </div>
+      </div>
+
+      <div class="deepl-progress" id="deeplProgress">
+        <div class="spinner"></div>
+        <span id="deeplProgressText">Gönderiliyor...</span>
+        <div class="deepl-bar"><div class="deepl-fill" id="deeplFill" style="width:0%"></div></div>
+        <button class="btn-sm danger" onclick="cancelTranslation()">İptal</button>
+      </div>
+
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+
+      <div class="filter-bar">
+        <input type="text" id="searchBox" placeholder="ID veya metin ara..." oninput="renderTable()">
+        <button class="filter-btn active" id="filterAll" onclick="setFilter('all')">Tümü</button>
+        <button class="filter-btn" id="filterPending" onclick="setFilter('pending')">Bekleyenler</button>
+        <button class="filter-btn" id="filterDone" onclick="setFilter('done')">Çevrilmiş</button>
+      </div>
+
+      <div class="string-table" id="stringTable"></div>
+    </div>
+
+    <!-- TAB 3 -->
+    <div class="tab-content" id="tab-export">
+      <div class="export-toolbar">
+        <button class="btn green" onclick="buildOutput()">🔨 XML Oluştur</button>
+        <button class="btn-sm secondary" onclick="copyOutput()">📋 Kopyala</button>
+        <button class="btn-sm" onclick="downloadXML()">⬇ İndir</button>
+        <div class="export-info" id="exportInfo">—</div>
+      </div>
+      <div class="editor-wrap">
+        <div class="line-nums" id="lineNums"></div>
+        <textarea id="xmlOutput" readonly placeholder="Önce 'XML Oluştur' butonuna bas..."
+          onscroll="syncScroll()" oninput="updateLineNums()"></textarea>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────
+let enStrings  = {};   // { id: decoded text }
+let trStrings  = {};   // { id: decoded text }
+let allStrings = [];   // [{ id, original, translation }]
+let fullEnXML  = '';
+let fullTrXML  = '';
+let currentFilter = 'all';
+let cancelFlag = false;
+let abortCtrl  = null;
+
+// ── Toast ────────────────────────────────────────────────────────────────
+function showToast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = 'toast', 3200);
+}
+
+// ── Line numbers ─────────────────────────────────────────────────────────
+function updateLineNums() {
+  const ta   = document.getElementById('xmlOutput');
+  const ln   = document.getElementById('lineNums');
+  const count = ta.value.split('\n').length;
+  let s = '';
+  for (let i = 1; i <= count; i++) s += i + '\n';
+  ln.textContent = s;
+}
+function syncScroll() {
+  const ta = document.getElementById('xmlOutput');
+  document.getElementById('lineNums').scrollTop = ta.scrollTop;
+}
+
+// ── API Key ───────────────────────────────────────────────────────────────
+function saveApiKey() {
+  const k = document.getElementById('apiKey').value.trim();
+  if (k) localStorage.setItem('deepl_key', k);
+  setApiStatus('idle','Key girildi — "Test" ile doğrulayın');
+}
+
+function getEndpoint(k) {
+  return k.endsWith(':fx')
+    ? 'https://api-free.deepl.com'
+    : 'https://api.deepl.com';
+}
+
+async function testApiKey() {
+  const k = getApiKey();
+  if (!k) { showToast('API key giriniz','err'); return; }
+  setApiStatus('idle','Test ediliyor...');
+  try {
+    const r = await fetch(getEndpoint(k)+'/v2/usage', {
+      headers:{ 'Authorization':'DeepL-Auth-Key '+k }
+    });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    const used  = d.character_count.toLocaleString('tr');
+    const limit = d.character_limit.toLocaleString('tr');
+    const pct   = Math.round(d.character_count/d.character_limit*100);
+    setApiStatus('ok',`✓ Geçerli — ${used} / ${limit} karakter (%${pct})`);
+    localStorage.setItem('deepl_key', k);
+  } catch(e) {
+    setApiStatus('err',`✗ ${e.message} — Key ":fx" ile bitiyor mu?`);
+  }
+}
+
+function setApiStatus(cls, msg) {
+  const el = document.getElementById('apiStatus');
+  el.className = 'api-status ' + cls;
+  el.textContent = msg;
+}
+
+function getApiKey() {
+  return document.getElementById('apiKey').value.trim()
+      || localStorage.getItem('deepl_key') || '';
+}
+
+// ── Dictionary ────────────────────────────────────────────────────────────
+let dictionary = [
+  {en:'Jump',tr:'Sıçrama'},{en:'Roll',tr:'Kaydır'},{en:'Interact',tr:'Etkileşim'},
+  {en:'Zoom',tr:'Yakınlaştır'},{en:'Docking Bay',tr:'Kenetlenme Alanı'},
+  {en:'Loading Bay',tr:'Yükleme Alanı'},{en:'Sleeper Bay',tr:'Dinlenme Alanı'},
+  {en:'Drop Zone',tr:'İndirme Alanı'},{en:'Thrusters',tr:'İtici Motorlar'},
+  {en:'Thruster',tr:'İtici Motor'},{en:'Generator',tr:'Jeneratör'},
+  {en:'Oxygen Generator',tr:'Oksijen Jeneratörü'},{en:'Authorised',tr:'Onaylandı'},
+  {en:'Not Authorised',tr:'Onaylanmadı'},{en:'Express Gates',tr:'Hızlı Geçişler'},
+  {en:'Express Gate',tr:'Hızlı Geçiş'},{en:'Auto-Essentials',tr:'Oto Gereçleri'},
+  {en:'Impound Center',tr:'El Koyma Merkezi'},{en:'Impound',tr:'El Koyma'},
+  {en:'Specialized Jobs',tr:'Uzmanlık Gerektiren İşler'},{en:'Pod',tr:'Kapsül'},
+  {en:'Rank',tr:'Seviye'},{en:'Contract',tr:'Sözleşme'},{en:'Waypoint',tr:'Yol Noktası'},
+  {en:'Skill Point',tr:'Yetenek Puanı'},{en:'Trailer',tr:'Römork'},
+  {en:'Maglock',tr:'Manyetik Kilit'},{en:'Salvage Beacon',tr:'Kurtarma İşareti'},
+  {en:'Hyper Highway',tr:'Hiper Otoyol'},{en:'Star Route',tr:'Yıldız Güzergahı'},
+  {en:'Toll',tr:'Geçiş Ücreti'},{en:'Space Suit',tr:'Uzay Giysisi'},
+  {en:'Anomaly',tr:'Anomali'},{en:'Solar Storm',tr:'Güneş Fırtınası'},
+  {en:'zero-g',tr:'sıfır yerçekimi'},{en:'Venture Job',tr:'Girişim İşi'},
+  {en:'Parking Bay',tr:'Park Alanı'},
+];
+
+function renderDict() {
+  document.getElementById('dictList').innerHTML = dictionary.map((d,i) => `
+    <div class="dict-item">
+      <span class="en">${esc(d.en)}</span>
+      <span class="arr">→</span>
+      <span class="tr">${esc(d.tr)}</span>
+      <button onclick="removeDict(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addDictEntry() {
+  const en = document.getElementById('dictEn').value.trim();
+  const tr = document.getElementById('dictTr').value.trim();
+  if (!en || !tr) return;
+  dictionary.unshift({en,tr});
+  document.getElementById('dictEn').value = '';
+  document.getElementById('dictTr').value = '';
+  renderDict(); saveDict();
+}
+
+function removeDict(i) { dictionary.splice(i,1); renderDict(); saveDict(); }
+function saveDict()    { localStorage.setItem('st_dict', JSON.stringify(dictionary)); }
+
+function loadDictFromStorage() {
+  const s = localStorage.getItem('st_dict');
+  if (s) try { dictionary = JSON.parse(s); } catch(e) {}
+}
+
+function exportDict() {
+  const b = new Blob([JSON.stringify(dictionary,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = 'st_dictionary.json';
+  a.click();
+}
+
+function importDict(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      dictionary = JSON.parse(ev.target.result);
+      renderDict(); saveDict();
+      showToast('✓ Sözlük içe aktarıldı');
+    } catch(err) { showToast('Geçersiz JSON','err'); }
+  };
+  r.readAsText(file);
+  e.target.value = '';
+}
+
+function applyDict(text) {
+  let out = text;
+  const sorted = [...dictionary].sort((a,b)=>b.en.length-a.en.length);
+  for (const {en,tr} of sorted) {
+    const rx = new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+    out = out.replace(rx, tr);
+  }
+  return out;
+}
+
+function applyDictToAll() {
+  let n = 0;
+  allStrings.forEach(s => { if(s.translation){ s.translation=applyDict(s.translation); n++; } });
+  renderTable();
+  showToast(`✓ Sözlük ${n} çeviriye uygulandı`);
+}
+
+// ── File loading ──────────────────────────────────────────────────────────
+function dragOver(e,id)  { e.preventDefault(); document.getElementById(id).classList.add('drag'); }
+function dragLeave(id)   { document.getElementById(id).classList.remove('drag'); }
+function dropFile(e,lang){ e.preventDefault(); dragLeave(lang==='en'?'dropEN':'dropTR'); readFile(e.dataTransfer.files[0],lang); }
+function loadXMLFile(e,lang){ readFile(e.target.files[0],lang); e.target.value=''; }
+
+function readFile(file, lang) {
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    if(lang==='en'){
+      fullEnXML = ev.target.result;
+      document.getElementById('fileNameEN').textContent = file.name;
+      document.getElementById('dropEN').classList.add('loaded');
+    } else {
+      fullTrXML = ev.target.result;
+      document.getElementById('fileNameTR').textContent = file.name;
+      document.getElementById('dropTR').classList.add('loaded');
+    }
+    checkBothLoaded();
+    showToast('✓ '+file.name+' yüklendi');
+  };
+  r.readAsText(file,'UTF-8');
+}
+
+function checkBothLoaded() {
+  const ok = fullEnXML && fullTrXML;
+  document.getElementById('btnAnalyze').disabled = !ok;
+  if(ok) document.getElementById('loadSummary').innerHTML =
+    'Her iki dosya yüklendi — <b>Dosyaları Karşılaştır</b>\'a basın';
+}
+
+// ── XML parse ─────────────────────────────────────────────────────────────
+function parseXML(xmlText) {
+  const out = {};
+  const rx  = /<string\s+id="([^"]+)">([\s\S]*?)<\/string>/g;
+  let m;
+  while((m=rx.exec(xmlText))!==null){
+    out[m[1]] = m[2]
+      .replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+      .replace(/&amp;/g,'&').replace(/&quot;/g,'"')
+      .replace(/&#x27;/g,"'").replace(/&#39;/g,"'");
+  }
+  return out;
+}
+
+// ── Analyze ───────────────────────────────────────────────────────────────
+function analyzeFiles() {
+  enStrings = parseXML(fullEnXML);
+  trStrings = parseXML(fullTrXML);
+  allStrings = [];
+  let newC=0, existC=0;
+
+  for(const [id,original] of Object.entries(enStrings)){
+    const existing    = trStrings[id] || '';
+    const isTranslated = existing && existing !== original;
+    allStrings.push({ id, original, translation: isTranslated ? existing : '' });
+    if(isTranslated) existC++; else newC++;
+  }
+
+  document.getElementById('loadSummary').innerHTML =
+    `<span style="color:var(--green)">${existC} çevrilmiş</span> + `+
+    `<span style="color:var(--yellow)">${newC} eksik</span> = ${allStrings.length} toplam`;
+
+  document.getElementById('btnTranslate').disabled = newC===0;
+  updateStats();
+  renderTable();
+  switchTab('translate');
+  loadSession();
+  showToast(`✓ ${newC} eksik string tespit edildi`);
+}
+
+// ── DeepL Translation ────────────────────────────────────────────────────
+const APOS_PH  = '\uE000';   // private-use placeholder for apostrophe  '
+const QUOT_PH  = '\uE001';   // private-use placeholder for double-quote  "
+
+async function translateAll() {
+  const key = getApiKey();
+  if(!key){ showToast('Önce DeepL API key girin','err'); return; }
+
+  const pending = allStrings.filter(s => !s.translation.trim());
+  if(!pending.length){ showToast('Bekleyen çeviri yok','err'); return; }
+
+  cancelFlag = false;
+  document.getElementById('btnTranslate').disabled = true;
+  document.getElementById('deeplProgress').classList.add('show');
+  setDeeplProgress(0,'DeepL\'e gönderiliyor...');
+
+  // Tek ve çift tırnak → placeholder (DeepL curly-quote yapmasın)
+  const texts = pending.map(s => s.original
+    .replace(/'/g, APOS_PH)
+    .replace(/"/g, QUOT_PH));
+
+  try {
+    abortCtrl = new AbortController();
+
+    const res = await fetch(getEndpoint(key)+'/v2/translate',{
+      method:'POST',
+      headers:{
+        'Authorization':'DeepL-Auth-Key '+key,
+        'Content-Type':'application/json'
+      },
+      body: JSON.stringify({ text:texts, source_lang:'EN', target_lang:'TR' }),
+      signal: abortCtrl.signal
+    });
+
+    if(!res.ok){
+      const errText = await res.text();
+      throw new Error(`DeepL ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    setDeeplProgress(80,'Sözlük uygulanıyor...');
+
+    data.translations.forEach((t,i)=>{
+      if(cancelFlag) return;
+      // Placeholder geri → orijinal tırnak, curly-quote temizle, sözlük uygula
+      let text = t.text
+        .replace(new RegExp(APOS_PH,'g'), "'")
+        .replace(new RegExp(QUOT_PH,'g'), '"')
+        .replace(/\u2018|\u2019/g, "'")   // curly tek tırnak
+        .replace(/\u201C|\u201D/g, '"');  // curly çift tırnak
+      text = applyDict(text);
+      pending[i].translation = text;
+    });
+
+    setDeeplProgress(100,'Tamamlandı!');
+    setTimeout(()=>document.getElementById('deeplProgress').classList.remove('show'),1200);
+
+    renderTable();
+    updateStats();
+    saveSession();
+    showToast(`✓ ${data.translations.length} string çevrildi`);
+
+  } catch(e) {
+    document.getElementById('deeplProgress').classList.remove('show');
+    if(e.name==='AbortError') showToast('Çeviri iptal edildi','err');
+    else { showToast(e.message,'err'); console.error(e); }
+  }
+  document.getElementById('btnTranslate').disabled = false;
+}
+
+function cancelTranslation() {
+  cancelFlag = true;
+  if(abortCtrl) abortCtrl.abort();
+}
+
+function setDeeplProgress(pct, txt) {
+  document.getElementById('deeplFill').style.width = pct+'%';
+  document.getElementById('deeplProgressText').textContent = txt;
+}
+
+// ── Session ───────────────────────────────────────────────────────────────
+function saveSession() {
+  const d = allStrings.map(s=>({id:s.id, translation:s.translation}));
+  localStorage.setItem('st_session', JSON.stringify(d));
+  showToast('✓ Oturum kaydedildi');
+}
+
+function loadSession() {
+  const s = localStorage.getItem('st_session');
+  if(!s) return;
+  try {
+    let restored = 0;
+    JSON.parse(s).forEach(({id,translation})=>{
+      const found = allStrings.find(x=>x.id===id);
+      if(found && translation && !found.translation){ found.translation=translation; restored++; }
+    });
+    if(restored>0){
+      renderTable(); updateStats();
+      showToast(`✓ Önceki oturumdan ${restored} çeviri yüklendi`);
+    }
+  } catch(e){}
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────
+function setFilter(f) {
+  currentFilter = f;
+  ['all','pending','done'].forEach(x=>{
+    document.getElementById('filter'+x.charAt(0).toUpperCase()+x.slice(1))
+      .classList.toggle('active', x===f);
+  });
+  renderTable();
+}
+
+function renderTable() {
+  const q = (document.getElementById('searchBox').value||'').toLowerCase();
+  let rows = allStrings;
+  if(q) rows = rows.filter(s=>
+    s.id.toLowerCase().includes(q)||
+    s.original.toLowerCase().includes(q)||
+    s.translation.toLowerCase().includes(q));
+  if(currentFilter==='pending') rows = rows.filter(s=>!s.translation.trim());
+  if(currentFilter==='done')    rows = rows.filter(s=> s.translation.trim());
+
+  document.getElementById('stringTable').innerHTML = rows.map((s,idx)=>{
+    const ri    = allStrings.indexOf(s)+1;
+    const hasTr = s.translation.trim();
+    return `
+    <div class="str-row ${hasTr?'translated':'missing'}">
+      <div class="str-num">${ri}</div>
+      <div class="str-en-col">
+        <span class="str-id">${esc(s.id)}</span>${esc(s.original)}
+      </div>
+      <div class="str-tr-wrap">
+        <textarea class="str-tr" rows="2"
+          data-id="${esc(s.id)}"
+          oninput="updateTr(this)"
+          placeholder="Çeviri...">${esc(s.translation)}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function updateTr(el) {
+  const id = el.getAttribute('data-id');
+  const s  = allStrings.find(x=>x.id===id);
+  if(s){ s.translation = el.value; updateStats(); }
+}
+
+function updateStats() {
+  const total   = allStrings.length;
+  const done    = allStrings.filter(s=>s.translation.trim()).length;
+  const pending = total-done;
+  const pct     = total ? Math.round(done/total*100) : 0;
+  document.getElementById('statTotal').textContent   = total;
+  document.getElementById('statDone').textContent    = done;
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('progressFill').style.width= pct+'%';
+}
+
+function clearTranslations() {
+  if(!confirm('Tüm çeviriler silinecek. Emin misiniz?')) return;
+  allStrings.forEach(s=>{ s.translation=''; });
+  renderTable(); updateStats();
+  showToast('Çeviriler temizlendi');
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+function encXML(v){
+  return v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+}
+
+function buildOutput() {
+  if(!fullTrXML && !fullEnXML){ showToast('Önce dosya yükle','err'); return; }
+  let output = fullTrXML || fullEnXML;
+  let updated = 0;
+
+  allStrings.forEach(s=>{
+    if(!s.translation.trim()) return;
+    // Sözlük son kez uygula (güvenlik)
+    const final = applyDict(s.translation);
+    const idEsc = s.id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const rx    = new RegExp(`(<string\\s+id="${idEsc}">)([\\s\\S]*?)(<\\/string>)`);
+    if(rx.test(output)){
+      output = output.replace(rx,`$1${encXML(final)}$3`);
+      updated++;
+    }
+  });
+
+  const ta = document.getElementById('xmlOutput');
+  ta.value = output;
+  updateLineNums();
+  document.getElementById('exportInfo').textContent = `${updated} string güncellendi`;
+  showToast('✓ XML oluşturuldu');
+}
+
+function copyOutput(){
+  const v = document.getElementById('xmlOutput').value;
+  if(!v){ showToast('Önce XML oluştur','err'); return; }
+  navigator.clipboard.writeText(v);
+  showToast('✓ Panoya kopyalandı');
+}
+
+function downloadXML(){
+  buildOutput();
+  const v = document.getElementById('xmlOutput').value;
+  if(!v) return;
+  const b = new Blob([v],{type:'application/xml'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = 'strings_TR.xml';
+  a.click();
+  showToast('✓ İndirildi');
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(name){
+  const names=['load','translate','export'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active',c.id==='tab-'+name));
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadDictFromStorage();
+renderDict();
+
+const savedKey = localStorage.getItem('deepl_key');
+if(savedKey){
+  document.getElementById('apiKey').value = savedKey;
+  setApiStatus('idle','Kayıtlı key yüklendi — "Test" ile doğrulayın');
+}
+
+updateLineNums();
+</script>
+</body>
+</html>
